@@ -1,0 +1,147 @@
+#include<Winsock2.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<time.h>
+#include<iostream>
+#pragma comment(lib,"ws2_32.lib")
+#define _CRT_SECURE_NO_WARNINGS
+#define cli_IP "192.168.43.110"
+#define ser_IP "192.168.43.110"
+#define cli_port 5051
+#define ser_port 5070
+#define DEFAULT_PORT 5071
+#define BUFFER_LENGTH 1024
+#define Null ""//空串
+using namespace std;
+
+char buf[BUFFER_LENGTH];
+char IP1[BUFFER_LENGTH];//client1
+char IP2[BUFFER_LENGTH];//client2
+char Port1[6];//client1
+char Port2[6];//client2
+char l[2];
+int port;
+int cnt = 0;
+
+void prttm()
+{
+	time_t t;
+	struct tm * lt;
+	time(&t);//获取Unix时间戳。
+	lt = localtime(&t);//转为时间结构。
+	printf("Time:%d/%d/%d %d:%d:%d\n", lt->tm_year + 1900, (lt->tm_mon) + 1, lt->tm_mday, lt->tm_hour, lt->tm_min, lt->tm_sec);//输出结果
+}
+
+void prtbuf()//打印信息
+{
+	int i = 0;
+	while (buf[i] != '\0')
+	{
+		printf("%c", buf[i]);
+		i++;
+	}
+}
+
+void rdIP()//读取对方的IP地址和端口
+{
+	//端口
+	port = 0;
+	port += Port2[3] - 48;
+	port += (Port2[2] - 48) * 10;
+	port += (Port2[1] - 48) * 100;
+	port += (Port2[0] - 48) * 1000;
+}
+
+
+void main()
+{
+	int iPort = DEFAULT_PORT;
+	WSADATA wsaData;
+	SOCKET sSocket;
+	int iLen;
+	int iSend;
+	int iRecv;
+	struct sockaddr_in ser, cli;
+	printf("--------------\n");
+	printf("Server waiting\n");
+	printf("--------------\n");
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+	{
+		printf("Faild to load Winsock.\n");
+		return;
+	}
+	while (1)
+	{
+		sSocket = socket(AF_INET, SOCK_DGRAM, 0);
+		if (sSocket == INVALID_SOCKET)
+		{
+			printf("socket() Faild:%d\n", WSAGetLastError());
+			return;
+		}
+		//服务器自身信息
+		ser.sin_family = AF_INET;
+		ser.sin_port = htons(iPort);
+		ser.sin_addr.s_addr = htonl(INADDR_ANY);
+		if (bind(sSocket, (LPSOCKADDR)&ser, sizeof(ser)) == SOCKET_ERROR)
+		{
+			printf("bind() Failed:%d\n", WSAGetLastError());
+			return;
+		}
+		iLen = sizeof(cli);
+		memset(l, 0, sizeof(l));
+		memset(IP1, 0, sizeof(IP1));
+		memset(IP2, 0, sizeof(IP2));
+		memset(Port1, 0, sizeof(Port1));
+		memset(Port2, 0, sizeof(Port2));
+		memset(buf, 0, sizeof(buf));
+		iRecv = recvfrom(sSocket, IP1, sizeof(IP1), 0, (SOCKADDR*)&cli, &iLen);//记几
+		iRecv = recvfrom(sSocket, IP2, sizeof(IP2), 0, (SOCKADDR*)&cli, &iLen);
+		iRecv = recvfrom(sSocket, Port1, sizeof(Port1), 0, (SOCKADDR*)&cli, &iLen);//记几
+		iRecv = recvfrom(sSocket, Port2, sizeof(Port2), 0, (SOCKADDR*)&cli, &iLen);
+		iRecv = recvfrom(sSocket, buf, sizeof(buf), 0, (SOCKADDR*)&cli, &iLen);
+		if (iRecv == SOCKET_ERROR)
+		{
+			printf("recvfrom() Failed:%d\n.", WSAGetLastError());
+			break;
+		}
+		else if (iRecv == 0)
+			break;
+		else
+		{
+			printf("recvfrom() Succeeded.\n");
+			prtbuf();//输出信息
+			cout << endl;
+			prttm();//输出时间
+			printf("-----------------------\n");
+		}
+		closesocket(sSocket);//关闭套接口
+
+		sSocket = socket(AF_INET, SOCK_DGRAM, 0);
+		//修改端口和IP（client2
+		cli.sin_family = AF_INET;
+		cli.sin_port = htons(cli_port);//修改端口
+		cli.sin_addr.s_addr = inet_addr(cli_IP);//修改IP
+		iSend = sendto(sSocket, "Set", sizeof("Set"), 0, (SOCKADDR*)&cli, sizeof(cli));//记几
+		iSend = sendto(sSocket, Null, sizeof(Null), 0, (SOCKADDR*)&cli, sizeof(cli));//空串
+		iSend = sendto(sSocket, Null, sizeof(Null), 0, (SOCKADDR*)&cli, sizeof(cli));
+		iSend = sendto(sSocket, Null, sizeof(Null), 0, (SOCKADDR*)&cli, sizeof(cli));
+		iSend = sendto(sSocket, Null, sizeof(Null), 0, (SOCKADDR*)&cli, sizeof(cli));
+		if (iSend == SOCKET_ERROR)
+		{
+			printf("sendto() Failed.:%d\n", WSAGetLastError());
+			printf("-----------------------\n");
+			break;
+		}
+		else if (iSend == 0)
+			break;
+		else
+		{
+			//printf("sendto() Succeeded.\n");
+			//prttm();
+			//printf("IP:[%s],port:[%d]\n", inet_ntoa(cli.sin_addr), ntohs(cli.sin_port));
+			printf("-----------------------\n\n");
+		}
+		closesocket(sSocket);
+	}
+	WSACleanup();
+}
