@@ -1,0 +1,586 @@
+#include<Winsock2.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<time.h>
+#include<iostream>
+#pragma comment(lib,"ws2_32.lib")
+#define _CRT_SECURE_NO_WARNINGS
+#define ser_port 5070
+#define set_port 5071
+#define iPort 5051
+#define BUFFER_LENGTH 1024
+#define ser_IP "192.168.43.110"//服务器IP
+#define i_IP "192.168.43.110"//自身IP
+#define Login "Login"
+#define Regist "Regist"
+#define Set "Set"
+#define Null ""//空串
+#define OK 0
+#define exit -2//退出
+#define Connect_Error -1//连接错误
+using namespace std;
+
+char tmpt[BUFFER_LENGTH];
+char buf[BUFFER_LENGTH];
+char IP1[BUFFER_LENGTH];
+char IP2[BUFFER_LENGTH];
+char ID1[BUFFER_LENGTH];
+char ID2[BUFFER_LENGTH];
+char password[BUFFER_LENGTH];
+char Port1[6];//记几
+char Port2[6];//对方
+char Port3[6];//群聊server端口
+int port;
+
+WSADATA wsaData;
+SOCKET sSocket;
+int iLen;
+int iSend;
+int iRecv;
+struct sockaddr_in ser, cli;
+
+void mainmenu() {
+	cout << "N****************************N" << endl;
+	cout << "**********聊 天 系 统*********" << endl;
+	cout << "******************************" << endl;
+	cout << "*        1. 用户注册         *" << endl;
+	cout << "*        2. 用户登陆         *" << endl;
+	cout << "******************************" << endl;
+	cout << "********(0)退出本系统*********" << endl;
+	cout << "N****************************N" << endl;
+	cout << " 请选择(输入相应数字):        " << endl;
+}
+
+void prttm()
+{
+	time_t t;
+	struct tm * lt;
+	time(&t);//获取Unix时间戳。
+	lt = localtime(&t);//转为时间结构。
+	printf("Time:%d/%d/%d %d:%d:%d\n", lt->tm_year + 1900, (lt->tm_mon) + 1, lt->tm_mday, lt->tm_hour, lt->tm_min, lt->tm_sec);//输出结果
+}
+
+void input()//输入信息
+{
+	int i;
+	cout << "*请输入文字内容：            *" << endl;
+	memset(tmpt, ' ', sizeof(tmpt));
+	cin >> tmpt;
+	for (i = 0; tmpt[i] != '\0'; i++)
+		buf[i] = tmpt[i];
+	buf[i] = '\0';
+}
+
+void add()//加上名字
+{
+	int i = 0;
+	int j = 0;
+	memset(buf, ' ', sizeof(buf));
+	while (ID1[i] != '\0')
+	{
+		buf[i] = ID1[i];
+		i++;
+	}
+	buf[i++] = ':';
+	buf[i++] = '\n';
+	while (tmpt[j] != '\n')
+	{
+		buf[i] = tmpt[j];
+		i++;
+		j++;
+	}
+}
+
+void prtbuf(char buf[BUFFER_LENGTH])//打印信息
+{
+	int i = 0;
+	while (buf[i] != '\0')
+	{
+		printf("%c", buf[i]);
+		i++;
+	}
+}
+
+int getID()
+{
+	int choose;
+	cout << "N****************************N" << endl;
+	cout << "**********聊 天 系 统*********" << endl;
+	cout << "******************************" << endl;
+	cout << "**********1.单人聊天**********" << endl;
+	cout << "**********2.多人聊天**********" << endl;
+	cout << "******************************" << endl;
+	cout << "*********(Q)退出本系统********" << endl;
+	cin >> choose;
+	if (choose == 1)
+	{
+		cout << "*请输入对方的ID:             *" << endl;
+		//读取对方ID
+		memset(ID2, ' ', sizeof(ID2));
+		int i = 0;
+		cin >> ID2;
+		if (ID2[0] == 'Q'&&ID2[1] == '\0')
+		{
+			system("cls");
+			return -1;//单人聊天
+		}
+		return 0;
+	}
+	else if (choose == 2)
+		return 1;//群发
+}
+
+void rtPt()//自己的端口地址写入port1
+{
+	Port1[0] = iPort / 1000 + 48;
+	Port1[1] = (iPort % 1000) / 100 + 48;
+	Port1[2] = (iPort % 100) / 10 + 48;
+	Port1[3] = (iPort % 10) + 48;
+}
+
+
+int regist()
+{
+	int flag;
+	cout << "N****************************N" << endl;
+	cout << "**********聊 天 系 统*********" << endl;
+	cout << "******************************" << endl;
+	cout << "*************注 册************" << endl;
+	cout << "******************************" << endl;
+	cout << "*********(0)退出本系统********" << endl;
+	cout << "******************************" << endl;
+	cout << "*请输入用户名：              *" << endl;
+	cin >> ID1;
+	if (ID1[0] == '0')
+		return exit;
+	cout << "*请输入密码：                *" << endl;
+	cin >> password;
+	if (password[0] == '0')
+		return exit;
+	//IP地址ser_IP
+	//端口iPort地址
+	rtPt();
+	/////////////////////////////////////////////////////////////////////////////////////////////////////
+	//发送给server
+
+	sSocket = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sSocket == INVALID_SOCKET)
+	{
+		printf("socket() Faild:%d\n", WSAGetLastError());
+		flag = Connect_Error;
+	}
+	//服务器自身信息
+	ser.sin_family = AF_INET;
+	ser.sin_port = htons(iPort);
+	ser.sin_addr.s_addr = htonl(INADDR_ANY);
+	if (bind(sSocket, (LPSOCKADDR)&ser, sizeof(ser)) == SOCKET_ERROR)
+	{
+		printf("bind() Failed:%d\n", WSAGetLastError());
+		flag = Connect_Error;
+	}
+	cli.sin_family = AF_INET;
+	cli.sin_port = htons(ser_port);//修改端口
+	cli.sin_addr.s_addr = inet_addr(ser_IP);//修改IP
+	iSend = sendto(sSocket, Regist, sizeof(Regist), 0, (SOCKADDR*)&cli, sizeof(cli));//注册标识0.0
+																					 //注册信息
+	iSend = sendto(sSocket, ID1, sizeof(ID1), 0, (SOCKADDR*)&cli, sizeof(cli));
+	iSend = sendto(sSocket, password, sizeof(password), 0, (SOCKADDR*)&cli, sizeof(cli));
+	iSend = sendto(sSocket, Port1, sizeof(Port1), 0, (SOCKADDR*)&cli, sizeof(cli));
+	iSend = sendto(sSocket, i_IP, sizeof(i_IP), 0, (SOCKADDR*)&cli, sizeof(cli));
+	if (iSend == SOCKET_ERROR)
+	{
+		printf("sendto() Failed.:%d\n", WSAGetLastError());
+		printf("-----------------------\n");
+	}
+	else if (iSend == 0)
+		flag = Connect_Error;//传输失败
+	closesocket(sSocket);//关闭套接口
+						 //接收注册结果
+	sSocket = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sSocket == INVALID_SOCKET)
+	{
+		printf("socket() Faild:%d\n", WSAGetLastError());
+		flag = Connect_Error;
+	}
+	//服务器自身信息
+	ser.sin_family = AF_INET;
+	ser.sin_port = htons(iPort);
+	ser.sin_addr.s_addr = htonl(INADDR_ANY);
+	if (bind(sSocket, (LPSOCKADDR)&ser, sizeof(ser)) == SOCKET_ERROR)
+	{
+		printf("bind() Failed:%d\n", WSAGetLastError());
+		flag = Connect_Error;
+	}
+	cli.sin_family = AF_INET;
+	cli.sin_port = htons(ser_port);//修改端口
+	cli.sin_addr.s_addr = inet_addr(ser_IP);//修改IP
+	iLen = sizeof(cli);
+	memset(IP1, 0, sizeof(IP1));
+	memset(IP2, 0, sizeof(IP2));
+	memset(Port1, 0, sizeof(Port1));
+	memset(Port1, 0, sizeof(Port1));
+	memset(buf, 0, sizeof(buf));
+	iRecv = recvfrom(sSocket, IP1, sizeof(IP1), 0, (SOCKADDR*)&cli, &iLen);//注册结果
+	if (IP1[0] == '0')//成功
+		flag = OK;
+	else if (IP1[0] == '1')//用户名重复
+		flag = 1;
+	else flag = Connect_Error;//连接失败，传输错误
+	if (iRecv == SOCKET_ERROR)
+	{
+		printf("recvfrom() Failed:%d\n.", WSAGetLastError());
+	}
+	else if (iRecv == 0)
+		flag = Connect_Error;//接收失败
+							 //空白信息，保持格式方便传输
+	iRecv = recvfrom(sSocket, IP2, sizeof(IP2), 0, (SOCKADDR*)&cli, &iLen);
+	iRecv = recvfrom(sSocket, Port1, sizeof(Port1), 0, (SOCKADDR*)&cli, &iLen);
+	iRecv = recvfrom(sSocket, Port2, sizeof(Port2), 0, (SOCKADDR*)&cli, &iLen);
+	iRecv = recvfrom(sSocket, buf, sizeof(buf), 0, (SOCKADDR*)&cli, &iLen);
+	closesocket(sSocket);//关闭套接口
+						 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+						 //成功
+	if (flag == 0)
+		cout << "**********注 册 成 功*********" << endl;
+	//失败
+	else if (flag == 1)
+	{
+		cout << "********用 户 名 重 复********" << endl;
+		cout << "**********注 册 失 败*********" << endl;
+	}
+	else if (flag == Connect_Error)
+	{
+		cout << "********连接服务器失败********" << endl;
+		cout << "**********注 册 失 败*********" << endl;
+	}
+	cout << "*****页 面 即 将 跳 转(3)*****" << endl;
+	Sleep(1000);
+	cout << "*****页 面 即 将 跳 转(2)*****" << endl;
+	Sleep(1000);
+	cout << "*****页 面 即 将 跳 转(1)*****" << endl;
+	Sleep(1000);
+	system("cls");
+	return flag;
+}
+
+int login()
+{
+	int flag;
+	cout << "N****************************N" << endl;
+	cout << "**********聊 天 系 统*********" << endl;
+	cout << "******************************" << endl;
+	cout << "*************登 陆************" << endl;
+	cout << "******************************" << endl;
+	cout << "*********(0)退出本系统********" << endl;
+	cout << "******************************" << endl;
+	cout << "*请输入用户名：              *" << endl;
+	cin >> ID1;
+	if (ID1[0] == '0')
+		return exit;
+	cout << "*请输入密码：                *" << endl;
+	cin >> password;
+	if (password[0] == '0')
+		return exit;
+	rtPt();
+	//传输，确认信息
+	cout << "**********正 在 登 录*********" << endl;
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////
+	//发送给server
+	sSocket = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sSocket == INVALID_SOCKET)
+	{
+		printf("socket() Faild:%d\n", WSAGetLastError());
+		flag = Connect_Error;
+	}
+	//服务器自身信息
+	ser.sin_family = AF_INET;
+	ser.sin_port = htons(iPort);
+	ser.sin_addr.s_addr = htonl(INADDR_ANY);
+	if (bind(sSocket, (LPSOCKADDR)&ser, sizeof(ser)) == SOCKET_ERROR)
+	{
+		printf("bind() Failed:%d\n", WSAGetLastError());
+		flag = Connect_Error;
+	}
+	cli.sin_family = AF_INET;
+	cli.sin_port = htons(ser_port);//修改端口
+	cli.sin_addr.s_addr = inet_addr(ser_IP);//修改IP
+	iSend = sendto(sSocket, Login, sizeof(Login), 0, (SOCKADDR*)&cli, sizeof(cli));//登陆标识0.0
+																				   //登陆信息
+	iSend = sendto(sSocket, ID1, sizeof(ID1), 0, (SOCKADDR*)&cli, sizeof(cli));
+	iSend = sendto(sSocket, password, sizeof(password), 0, (SOCKADDR*)&cli, sizeof(cli));
+	iSend = sendto(sSocket, Port1, sizeof(Port1), 0, (SOCKADDR*)&cli, sizeof(cli));
+	iSend = sendto(sSocket, ser_IP, sizeof(ser_IP), 0, (SOCKADDR*)&cli, sizeof(cli));
+	if (iSend == SOCKET_ERROR)
+	{
+		printf("sendto() Failed.:%d\n", WSAGetLastError());
+		printf("-----------------------\n");
+	}
+	else if (iSend == 0)
+		flag = Connect_Error;//传输失败
+	closesocket(sSocket);//关闭套接口
+						 //接收登录结果
+	sSocket = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sSocket == INVALID_SOCKET)
+	{
+		printf("socket() Faild:%d\n", WSAGetLastError());
+		flag = Connect_Error;
+	}
+	//服务器自身信息
+	ser.sin_family = AF_INET;
+	ser.sin_port = htons(iPort);
+	ser.sin_addr.s_addr = htonl(INADDR_ANY);
+	if (bind(sSocket, (LPSOCKADDR)&ser, sizeof(ser)) == SOCKET_ERROR)
+	{
+		printf("bind() Failed:%d\n", WSAGetLastError());
+		flag = Connect_Error;
+	}
+	cli.sin_family = AF_INET;
+	cli.sin_port = htons(ser_port);//修改端口
+	cli.sin_addr.s_addr = inet_addr(ser_IP);//修改IP
+	iLen = sizeof(cli);
+	memset(IP1, 0, sizeof(IP1));
+	memset(IP2, 0, sizeof(IP2));
+	memset(Port1, 0, sizeof(Port1));
+	memset(Port1, 0, sizeof(Port1));
+	memset(buf, 0, sizeof(buf));
+	iRecv = recvfrom(sSocket, IP1, sizeof(IP1), 0, (SOCKADDR*)&cli, &iLen);//登陆结果
+	if (IP1[0] == '0')//成功
+		flag = OK;
+	else if (IP1[0] == '1')//用户名不存在
+		flag = 1;
+	else if (IP1[0] == '2')//密码错误
+		flag = 2;
+	else if (IP1[0] == '3')//重复登录
+		flag = 3;
+	else flag = Connect_Error;//连接失败，传输错误
+	if (iRecv == SOCKET_ERROR)
+	{
+		printf("recvfrom() Failed:%d\n.", WSAGetLastError());
+	}
+	else if (iRecv == 0)
+		flag = Connect_Error;//接收失败
+
+							 //空白信息，保持格式方便传输
+	iRecv = recvfrom(sSocket, IP2, sizeof(IP2), 0, (SOCKADDR*)&cli, &iLen);
+	iRecv = recvfrom(sSocket, Port1, sizeof(Port1), 0, (SOCKADDR*)&cli, &iLen);
+	iRecv = recvfrom(sSocket, Port2, sizeof(Port2), 0, (SOCKADDR*)&cli, &iLen);
+	iRecv = recvfrom(sSocket, buf, sizeof(buf), 0, (SOCKADDR*)&cli, &iLen);
+	closesocket(sSocket);//关闭套接口
+						 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+						 //收到确认信息后
+	if (flag == 0)//成功
+		cout << "**********登 陆 成 功*********" << endl;
+	else if (flag == 1)//用户名不存在
+	{
+		cout << "*****该 用 户 名 不 存 在*****" << endl;
+		cout << "**********登 陆 失 败*********" << endl;
+	}
+	else if (flag == 2)//密码错误
+	{
+		cout << "**********密 码 错 误*********" << endl;
+		cout << "**********登 陆 失 败*********" << endl;
+	}
+	else if (flag == 3)//重复登陆
+	{
+		cout << "**********重 复 登 录*********" << endl;
+		cout << "**********登 陆 失 败*********" << endl;
+	}
+	cout << "*****页 面 即 将 跳 转(3)*****" << endl;
+	Sleep(1000);
+	cout << "*****页 面 即 将 跳 转(2)*****" << endl;
+	Sleep(1000);
+	cout << "*****页 面 即 将 跳 转(1)*****" << endl;
+	Sleep(1000);
+	system("cls");
+	return flag;
+}
+
+void main()
+{
+	int choose;//选项
+	int flag;
+	char c;
+
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+	{
+		printf("Faild to load Winsock.\n");
+		return;
+	}
+
+loop1:mainmenu();//主菜单
+	cin >> choose;
+	c = getchar();
+	switch (choose)
+	{
+	case 0:return;//退出
+	case 1:
+	{
+		system("cls");
+		if (regist() == 0)
+			goto loop2;//去往登陆界面登陆
+		else
+		{
+			system("cls");
+			goto loop1;//注册失败，返回主界面
+		}
+		break;
+	}//注册
+loop2:case 2:
+{
+	system("cls");
+	if (login() != 0)
+	{
+		system("cls");
+		goto loop1;//登录失败，重新登陆
+	}
+	break;
+}//登陆
+default:
+{
+	cout << "请输入正确的数字指令！" << endl;
+	cout << "*****页 面 即 将 跳 转(3)*****" << endl;
+	Sleep(1000);
+	cout << "*****页 面 即 将 跳 转(2)*****" << endl;
+	Sleep(1000);
+	cout << "*****页 面 即 将 跳 转(1)*****" << endl;
+	Sleep(1000);
+	system("cls");
+	goto loop1;
+	break;
+}
+	}
+	flag = getID();
+	if (flag == -1)
+		goto loop1;//退出返回登录界面
+
+	while (1)
+	{
+		sSocket = socket(AF_INET, SOCK_DGRAM, 0);
+		if (sSocket == INVALID_SOCKET)
+		{
+			printf("socket() Faild:%d\n", WSAGetLastError());
+			return;
+		}
+		//服务器自身信息
+		ser.sin_family = AF_INET;
+		ser.sin_port = htons(iPort);
+		ser.sin_addr.s_addr = htonl(INADDR_ANY);
+		if (bind(sSocket, (LPSOCKADDR)&ser, sizeof(ser)) == SOCKET_ERROR)
+		{
+			printf("bind() Failed:%d\n", WSAGetLastError());
+			return;
+		}
+		cli.sin_family = AF_INET;
+		cli.sin_port = htons(ser_port);//修改端口
+		cli.sin_addr.s_addr = inet_addr(ser_IP);//修改IP
+		input();
+		if (buf[0] != 'Q'&&buf[1] != '\0')
+			add();//加上ID
+		rtPt();//自己的端口地址
+		if (flag == 0)//单人聊天
+		{
+			iSend = sendto(sSocket, i_IP, sizeof(i_IP), 0, (SOCKADDR*)&cli, sizeof(cli));//记几IP
+			iSend = sendto(sSocket, ID2, sizeof(ID2), 0, (SOCKADDR*)&cli, sizeof(cli));//对方ID
+			iSend = sendto(sSocket, Port1, sizeof(Port1), 0, (SOCKADDR*)&cli, sizeof(cli));//记几端口
+			iSend = sendto(sSocket, Null, sizeof(Null), 0, (SOCKADDR*)&cli, sizeof(cli));//对方端口地址布吉岛0.0
+			iSend = sendto(sSocket, buf, sizeof(buf), 0, (SOCKADDR*)&cli, sizeof(cli));
+		}
+		else if (flag == 1)//群聊
+		{
+			iSend = sendto(sSocket, Set, sizeof(Set), 0, (SOCKADDR*)&cli, sizeof(cli));//群聊标记
+			iSend = sendto(sSocket, i_IP, sizeof(i_IP), 0, (SOCKADDR*)&cli, sizeof(cli));//记几IP
+			iSend = sendto(sSocket, Port1, sizeof(Port1), 0, (SOCKADDR*)&cli, sizeof(cli));//自己的端口
+			iSend = sendto(sSocket, Null, sizeof(Null), 0, (SOCKADDR*)&cli, sizeof(cli));
+			iSend = sendto(sSocket, buf, sizeof(buf), 0, (SOCKADDR*)&cli, sizeof(cli));
+		}
+		if (iSend == SOCKET_ERROR)
+		{
+			printf("sendto() Failed.:%d\n", WSAGetLastError());
+			printf("-----------------------\n");
+			break;
+		}
+		else if (iSend == 0)
+			break;
+		else
+		{
+			if (buf[0] == 'Q'&&buf[1] == '\0')
+			{
+				cout << "*******正在退出聊天系统*******" << endl;
+				cout << "*******即将进入登录页面*******" << endl;
+				Sleep(1000);
+				cout << "*****页 面 即 将 跳 转(3)*****" << endl;
+				Sleep(1000);
+				cout << "*****页 面 即 将 跳 转(2)*****" << endl;
+				Sleep(1000);
+				cout << "*****页 面 即 将 跳 转(1)*****" << endl;
+				Sleep(1000);
+				system("cls");
+				closesocket(sSocket);//关闭套接口
+				goto loop1;
+			}
+			printf("sendto Succeed()\n");
+			prttm();
+			printf("-----------------------\n");
+		}
+		closesocket(sSocket);//关闭套接口
+		sSocket = socket(AF_INET, SOCK_DGRAM, 0);
+		if (sSocket == INVALID_SOCKET)
+		{
+			printf("socket() Faild:%d\n", WSAGetLastError());
+			return;
+		}
+		//服务器自身信息
+		ser.sin_family = AF_INET;
+		ser.sin_port = htons(iPort);
+		ser.sin_addr.s_addr = htonl(INADDR_ANY);
+		if (bind(sSocket, (LPSOCKADDR)&ser, sizeof(ser)) == SOCKET_ERROR)
+		{
+			printf("bind() Failed:%d\n", WSAGetLastError());
+			return;
+		}
+		cli.sin_family = AF_INET;
+		cli.sin_port = htons(ser_port);//修改端口
+		cli.sin_addr.s_addr = inet_addr(ser_IP);//修改IP
+		iLen = sizeof(cli);
+		memset(IP1, 0, sizeof(IP1));
+		memset(IP2, 0, sizeof(IP2));
+		memset(Port1, 0, sizeof(Port1));
+		memset(Port1, 0, sizeof(Port1));
+		memset(buf, 0, sizeof(buf));
+		iRecv = recvfrom(sSocket, IP1, sizeof(IP1), 0, (SOCKADDR*)&cli, &iLen);//记几
+		iRecv = recvfrom(sSocket, IP2, sizeof(IP2), 0, (SOCKADDR*)&cli, &iLen);
+		iRecv = recvfrom(sSocket, Port1, sizeof(Port1), 0, (SOCKADDR*)&cli, &iLen);//记几
+		iRecv = recvfrom(sSocket, Port2, sizeof(Port2), 0, (SOCKADDR*)&cli, &iLen);
+		iRecv = recvfrom(sSocket, buf, sizeof(buf), 0, (SOCKADDR*)&cli, &iLen);
+		if (iRecv == SOCKET_ERROR)
+		{
+			printf("recvfrom() Failed:%d\n.", WSAGetLastError());
+			break;
+		}
+		else if (iRecv == 0)
+			break;
+		else
+		{
+			if (buf[0] == 'Q'&&buf[1] == '\0')
+			{
+				c = getchar();
+				printf("对方已退出聊天\n");
+			}
+			else
+			{
+				printf("\n");
+				prtbuf(buf);//输出信息
+				cout << endl;
+				prttm();//输出时间
+				printf("-----------------------\n\n");
+			}
+		}
+		if (IP1[0] == 'S')
+			flag = 1;
+		closesocket(sSocket);//关闭套接口
+	}
+	WSACleanup();
+}
